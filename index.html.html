@@ -1,0 +1,1764 @@
+<!DOCTYPE html>
+<html lang="id" class="h-full bg-slate-900 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Prototype RE-SOIL Digital Restoration Loop untuk pemantauan dan perencanaan restorasi gambut pascakarhutla.">
+    <meta name="color-scheme" content="dark">
+    <title>RE-SOIL Digital Restoration Loop - Peta Restorasi Gambut Interaktif</title>
+    <!-- Static deployment ready: simpan file ini sebagai index.html pada root hosting (GitHub Pages/Netlify/Vercel static). -->
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        deepBlue: '#0F172A',
+                        oceanBlue: '#0284C7',
+                        tealCustom: '#0F766E',
+                        emeraldCustom: '#059669',
+                        softGreen: '#D1FAE5',
+                        peatDark: '#1E293B',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Leaflet JS & CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Chart.js CDN -->
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        /* Custom Styling & Glassmorphism Effects */
+        body { font-family: 'Inter', sans-serif; overflow-x: hidden; }
+        .hidden { display: none !important; }
+        .dependency-warning {
+            position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+            z-index: 9999; max-width: min(92vw, 720px); padding: 10px 14px;
+            border-radius: 12px; background: rgba(127,29,29,.96); color: #fee2e2;
+            border: 1px solid rgba(248,113,113,.45); box-shadow: 0 12px 30px rgba(0,0,0,.35);
+            font-size: 12px; line-height: 1.45;
+        }
+        
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .glass-panel-light {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+        }
+
+        /* Marker Glow & Pulse Animations */
+        @keyframes pulseGlowRed {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1.15); box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        @keyframes pulseGlowAmber {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
+            70% { transform: scale(1.15); box-shadow: 0 0 0 15px rgba(245, 158, 11, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+        }
+        @keyframes pulseGlowBlue {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.7); }
+            70% { transform: scale(1.15); box-shadow: 0 0 0 15px rgba(14, 165, 233, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); }
+        }
+        @keyframes pulseGlowEmerald {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1.15); box-shadow: 0 0 0 15px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        .pulse-marker-kritis { animation: pulseGlowRed 2s infinite; }
+        .pulse-marker-prioritas { animation: pulseGlowAmber 2s infinite; }
+        .pulse-marker-pemantauan { animation: pulseGlowBlue 2.5s infinite; }
+        .pulse-marker-pulih { animation: pulseGlowEmerald 3s infinite; }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
+        ::-webkit-scrollbar-thumb { background: rgba(51, 65, 85, 0.8); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(2, 132, 199, 0.8); }
+
+        /* Leaflet Map Specific Reset */
+        .leaflet-container { background: #0f172a !important; font-family: 'Inter', sans-serif !important; }
+        .leaflet-popup-content-wrapper {
+            background: rgba(15, 23, 42, 0.92) !important;
+            color: #f8fafc !important;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(12px);
+            border-radius: 12px !important;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5) !important;
+        }
+        .leaflet-popup-tip { background: rgba(15, 23, 42, 0.92) !important; }
+        
+        /* Side Drawer Animation */
+        .map-drawer {
+            transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .map-drawer.closed {
+            transform: translateX(105%);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+    <noscript><div class="dependency-warning">JavaScript harus diaktifkan agar RE-SOIL Digital Restoration Loop dapat digunakan.</div></noscript>
+
+    <!-- Top Navigation Header -->
+    <header class="sticky top-0 z-50 glass-panel border-b border-slate-800/80 px-4 lg:px-8 py-3">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            
+            <!-- Logo & Title -->
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-500 to-sky-500 flex items-center justify-center shadow-lg shadow-teal-500/20">
+                    <i class="fa-solid font-bold text-slate-950 text-xl fa-seedling"></i>
+                </div>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-teal-400 via-sky-400 to-emerald-400">RE-SOIL</span>
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-300 border border-teal-500/30 font-medium">Digital Loop Prototype</span>
+                    </div>
+                    <p class="text-xs text-slate-400 hidden sm:block">Sistem Monitoring & Restorasi Gambut Berbasis Smart Core-Shell Phytobead</p>
+                </div>
+            </div>
+
+            <!-- Role Switcher & Action Items -->
+            <div class="flex items-center space-x-3">
+                
+                <!-- Role Selector -->
+                <div class="flex items-center bg-slate-800/80 rounded-lg p-1 border border-slate-700/60">
+                    <span class="text-xs text-slate-400 px-2 font-medium hidden md:inline">Peran:</span>
+                    <select id="roleSelector" onchange="changeUserRole(this.value)" class="bg-slate-900 text-xs text-slate-200 font-semibold rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-sky-500 border border-slate-700 cursor-pointer">
+                        <option value="publik">🌐 Publik / Tamu</option>
+                        <option value="ranger" selected>🌿 Ranger Lapangan</option>
+                        <option value="peneliti">🔬 Peneliti Gambut</option>
+                        <option value="admin">⚙️ Admin Restorasi</option>
+                    </select>
+                </div>
+
+                <!-- Phytobead Info Modal Button -->
+                <button onclick="openPhytobeadModal()" class="px-3 py-1.5 rounded-lg bg-teal-500/15 hover:bg-teal-500/25 text-teal-300 border border-teal-500/30 text-xs font-semibold flex items-center space-x-1.5 transition-all">
+                    <i class="fa-solid fa-circle-info text-teal-400"></i>
+                    <span class="hidden sm:inline">Anatomi Phytobead</span>
+                </button>
+
+                <!-- Status Badge -->
+                <div class="hidden lg:flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span class="font-medium">Prototype Interaktif</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Navigation Bar -->
+        <nav class="flex items-center space-x-1 sm:space-x-2 mt-3 pt-2 border-t border-slate-800/60 overflow-x-auto no-scrollbar">
+            <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn active px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-all whitespace-nowrap bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                <i class="fa-solid fa-chart-line"></i><span>Dashboard Restorasi</span>
+            </button>
+            <button onclick="switchTab('map')" id="nav-map" class="nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-all whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-slate-800/50">
+                <i class="fa-solid fa-map-location-dot"></i><span>Peta Restorasi Gambut</span>
+                <span class="px-1.5 py-0.2 text-[10px] bg-red-500 text-white rounded-full font-bold">HOT</span>
+            </button>
+            <button onclick="switchTab('planner')" id="nav-planner" class="nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-all whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-slate-800/50">
+                <i class="fa-solid fa-boxes-packing"></i><span>Perencana Deployment & Batch</span>
+            </button>
+            <button onclick="switchTab('monitoring')" id="nav-monitoring" class="nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-all whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-slate-800/50">
+                <i class="fa-solid fa-microscope"></i><span>Monitoring Restorasi</span>
+            </button>
+            <button onclick="switchTab('reporting')" id="nav-reporting" class="nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-all whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-slate-800/50">
+                <i class="fa-solid fa-triangle-exclamation"></i><span>Pelaporan & Risiko</span>
+            </button>
+            <button onclick="switchTab('recommendation')" id="nav-recommendation" class="nav-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-all whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-slate-800/50">
+                <i class="fa-solid fa-brain"></i><span>Rekomendasi Adaptif</span>
+            </button>
+        </nav>
+    </header>
+
+    <!-- MAIN CONTENT CONTAINER -->
+    <main class="flex-1 overflow-y-auto p-4 lg:p-6 space-y-6">
+
+        <section id="hero-overview" class="glass-panel rounded-2xl p-5 border border-slate-800 relative overflow-hidden">
+            <div class="absolute top-3 right-3 z-20 text-[10px] px-2 py-1 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/30">Data pada tampilan adalah simulasi prototipe</div>
+            <div class="absolute -right-10 -bottom-10 w-64 h-64 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 relative z-10">
+                <div>
+                    <h1 class="text-xl lg:text-2xl font-bold text-white flex items-center gap-2">
+                        <span>Lengkung Restorasi Digital Gambut Indonesia</span>
+                        <span id="roleBadgeDisplay" class="text-xs px-2.5 py-0.5 rounded-md bg-teal-500/20 text-teal-300 border border-teal-500/30">Mode: Ranger Lapangan</span>
+                    </h1>
+                    <p class="text-xs lg:text-sm text-slate-300 mt-1 max-w-3xl leading-relaxed">
+                        Mengintegrasikan analisis spasial GIS, data lapangan dan laboratorium, <i>Smart Core-Shell Phytobead</i>, serta regenerasi <i>Dyera polyphylla</i> dalam satu Digital Restoration Loop yang adaptif.
+                    </p>
+                </div>
+                
+                <!-- Quick Flow Indicator -->
+                <div class="flex items-center space-x-2 bg-slate-900/80 p-2 rounded-xl border border-slate-800 text-xs">
+                    <div class="text-center px-2 py-1 bg-red-500/20 text-red-300 rounded border border-red-500/30 font-semibold">1. Detoksifikasi</div>
+                    <i class="fa-solid fa-arrow-right text-slate-500 text-[10px]"></i>
+                    <div class="text-center px-2 py-1 bg-amber-500/20 text-amber-300 rounded border border-amber-500/30 font-semibold">2. Transisi</div>
+                    <i class="fa-solid fa-arrow-right text-slate-500 text-[10px]"></i>
+                    <div class="text-center px-2 py-1 bg-sky-500/20 text-sky-300 rounded border border-sky-500/30 font-semibold">3. Perkecambahan</div>
+                    <i class="fa-solid fa-arrow-right text-slate-500 text-[10px]"></i>
+                    <div class="text-center px-2 py-1 bg-emerald-500/20 text-emerald-300 rounded border border-emerald-500/30 font-semibold">4. Vegetasi Mandiri</div>
+                </div>
+            </div>
+        </section>
+
+        <section id="sec-dashboard" class="tab-content space-y-6">
+            
+            <!-- KPI Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                
+                <div class="glass-panel p-4 rounded-xl border-l-4 border-l-sky-500 relative">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Total Area Terestorasi</p>
+                            <h3 class="text-2xl font-bold text-white mt-1">1,420 <span class="text-xs font-normal text-slate-400">Hektar</span></h3>
+                        </div>
+                        <div class="w-10 h-10 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center">
+                            <i class="fa-solid fa-map-marked-alt text-lg"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-center text-xs text-emerald-400 space-x-1">
+                        <i class="fa-solid fa-arrow-up"></i>
+                        <span>+12.4% bulan ini</span>
+                    </div>
+                </div>
+
+                <div class="glass-panel p-4 rounded-xl border-l-4 border-l-teal-500 relative">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Muka Air Tanah (MAT) Rata-rata</p>
+                            <h3 class="text-2xl font-bold text-white mt-1">-28.4 <span class="text-xs font-normal text-slate-400">cm</span></h3>
+                        </div>
+                        <div class="w-10 h-10 rounded-lg bg-teal-500/20 text-teal-400 flex items-center justify-center">
+                            <i class="fa-solid fa-water text-lg"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-center text-xs text-amber-400 space-x-1">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span>Ambang aman min: -40cm</span>
+                    </div>
+                </div>
+
+                <div class="glass-panel p-4 rounded-xl border-l-4 border-l-emerald-500 relative">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Perubahan PAH (Simulasi)</p>
+                            <h3 class="text-2xl font-bold text-white mt-1">78.6 <span class="text-xs font-normal text-slate-400">%</span></h3>
+                        </div>
+                        <div class="w-10 h-10 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                            <i class="fa-solid fa-filter-circle-xmark text-lg"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-center text-xs text-emerald-400 space-x-1">
+                        <i class="fa-solid fa-check-double"></i>
+                        <span>Indikator prototipe; perlu verifikasi lab</span>
+                    </div>
+                </div>
+
+                <div class="glass-panel p-4 rounded-xl border-l-4 border-l-amber-500 relative">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Tingkat Kelangsungan Jelutung</p>
+                            <h3 class="text-2xl font-bold text-white mt-1">84.2 <span class="text-xs font-normal text-slate-400">%</span></h3>
+                        </div>
+                        <div class="w-10 h-10 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                            <i class="fa-solid fa-tree text-lg"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-center text-xs text-slate-400 space-x-1">
+                        <i class="fa-solid fa-tree text-teal-400"></i>
+                        <span>Dyera polyphylla (34,000 bibit)</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Charts Row 1 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Trend Muka Air Tanah & Kelembapan -->
+                <div class="glass-panel p-5 rounded-2xl space-y-3">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="font-bold text-white text-sm">Trend Muka Air Tanah (MAT) & Kelembapan Gambut</h3>
+                            <p class="text-xs text-slate-400">Pemantauan telemetry harian dari 6 stasiun utama</p>
+                        </div>
+                        <span class="text-xs px-2 py-1 bg-slate-800 text-sky-400 rounded-md border border-slate-700">Data Telemetri / Simulasi</span>
+                    </div>
+                    <div class="h-64 relative">
+                        <canvas id="chartMATMoisture"></canvas>
+                    </div>
+                </div>
+
+                <!-- Kurva Detoksifikasi PAH -->
+                <div class="glass-panel p-5 rounded-2xl space-y-3">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="font-bold text-white text-sm">Siklus Laju Degradasi PAH (Polycyclic Aromatic Hydrocarbons)</h3>
+                            <p class="text-xs text-slate-400">Kadar PAH (ppm) vs Hari Pasca Deployment Phytobead</p>
+                        </div>
+                        <span class="text-xs px-2 py-1 bg-slate-800 text-teal-400 rounded-md border border-slate-700">Data Simulasi Lab</span>
+                    </div>
+                    <div class="h-64 relative">
+                        <canvas id="chartPAHDegradation"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Restoration Batch Table Summary -->
+            <div class="glass-panel p-5 rounded-2xl space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                        <h3 class="font-bold text-white text-base">Ringkasan Batch Deployment Aktif</h3>
+                        <p class="text-xs text-slate-400">Siklus hidup Phytobead dan status vegetasi di lokasi intervensi</p>
+                    </div>
+                    <button onclick="switchTab('planner')" class="px-3 py-1.5 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-xs font-semibold transition-all flex items-center space-x-2 self-start">
+                        <i class="fa-solid fa-plus"></i><span>Buat Deployment Baru</span>
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-300">
+                        <thead class="bg-slate-800/80 uppercase text-slate-400 text-[10px] font-bold tracking-wider">
+                            <tr>
+                                <th class="p-3 rounded-l-lg">ID Batch</th>
+                                <th class="p-3">Lokasi Site</th>
+                                <th class="p-3">Luas (Ha)</th>
+                                <th class="p-3">Tanggal Sebar</th>
+                                <th class="p-3">Fase RE-SOIL</th>
+                                <th class="p-3">Skor RPI</th>
+                                <th class="p-3 rounded-r-lg text-right">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/60">
+                            <tr class="hover:bg-slate-800/40">
+                                <td class="p-3 font-mono font-bold text-sky-400">PB-2026-KT01</td>
+                                <td class="p-3 font-semibold text-white">Sebangau Blok A (Kalteng)</td>
+                                <td class="p-3">250 Ha</td>
+                                <td class="p-3">12 Jan 2026</td>
+                                <td class="p-3"><span class="px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/30 text-[11px]">FASE 1: DETOX</span></td>
+                                <td class="p-3 font-bold text-red-400">88 / 100</td>
+                                <td class="p-3 text-right">
+                                    <button onclick="zoomToSite('sebangau')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-sky-300 rounded border border-slate-700 text-xs">Peta</button>
+                                </td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40">
+                                <td class="p-3 font-mono font-bold text-sky-400">PB-2026-RI03</td>
+                                <td class="p-3 font-semibold text-white">Meranti Buffer Zone (Riau)</td>
+                                <td class="p-3">180 Ha</td>
+                                <td class="p-3">02 Feb 2026</td>
+                                <td class="p-3"><span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px]">FASE 2: TRANSISI</span></td>
+                                <td class="p-3 font-bold text-amber-400">74 / 100</td>
+                                <td class="p-3 text-right">
+                                    <button onclick="zoomToSite('meranti')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-sky-300 rounded border border-slate-700 text-xs">Peta</button>
+                                </td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40">
+                                <td class="p-3 font-mono font-bold text-sky-400">PB-2025-RI01</td>
+                                <td class="p-3 font-semibold text-white">Kampar Sektor 4 (Riau)</td>
+                                <td class="p-3">320 Ha</td>
+                                <td class="p-3">15 Okt 2025</td>
+                                <td class="p-3"><span class="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[11px]">FASE 3: PERKECAMBAHAN</span></td>
+                                <td class="p-3 font-bold text-sky-400">42 / 100</td>
+                                <td class="p-3 text-right">
+                                    <button onclick="zoomToSite('kampar')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-sky-300 rounded border border-slate-700 text-xs">Peta</button>
+                                </td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40">
+                                <td class="p-3 font-mono font-bold text-sky-400">PB-2025-SS02</td>
+                                <td class="p-3 font-semibold text-white">Sembilang Restoration Area (Sumsel)</td>
+                                <td class="p-3">400 Ha</td>
+                                <td class="p-3">10 Jun 2025</td>
+                                <td class="p-3"><span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px]">FASE 4: ESTABLISHMENT</span></td>
+                                <td class="p-3 font-bold text-emerald-400">18 / 100</td>
+                                <td class="p-3 text-right">
+                                    <button onclick="zoomToSite('sembilang')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-sky-300 rounded border border-slate-700 text-xs">Peta</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </section>
+
+        <section id="sec-map" class="tab-content hidden space-y-4">
+            
+            <!-- Map Container with Floating UI Elements -->
+            <div class="relative w-full h-[720px] rounded-2xl overflow-hidden border border-slate-800 shadow-2xl">
+                
+                <!-- Leaflet Canvas Target -->
+                <div id="peatMap" class="w-full h-full z-0"></div>
+
+                <!-- FLOATING CONTROL TOOLBAR TOP LEFT -->
+                <div class="absolute top-4 left-4 z-20 flex flex-col space-y-2 max-w-sm w-full pointer-events-auto">
+                    
+                    <!-- Search Site Bar -->
+                    <div class="glass-panel p-2 rounded-xl flex items-center space-x-2 shadow-lg">
+                        <i class="fa-solid fa-magnifying-glass text-slate-400 text-sm ml-2"></i>
+                        <input type="text" id="siteSearchInput" onkeyup="filterSiteSearch(this.value)" placeholder="Cari lokasi site restorasi..." class="bg-transparent text-xs text-white placeholder-slate-400 focus:outline-none w-full py-1">
+                        <button onclick="resetMapView()" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] rounded border border-slate-700">Reset</button>
+                    </div>
+
+                    <!-- Autocomplete Results Dropdown -->
+                    <div id="searchDropdown" class="glass-panel rounded-xl hidden max-h-48 overflow-y-auto p-1 divide-y divide-slate-800 text-xs"></div>
+
+                    <!-- Filter Status Buttons Bar -->
+                    <div class="glass-panel p-2 rounded-xl flex items-center justify-between gap-1 overflow-x-auto text-xs shadow-lg">
+                        <span class="text-[10px] uppercase font-bold text-slate-400 px-1">Status:</span>
+                        <button onclick="filterMapMarkers('all')" class="map-filter-btn px-2 py-1 rounded-md bg-sky-500 text-white text-[11px] font-semibold">Semua</button>
+                        <button onclick="filterMapMarkers('kritis')" class="map-filter-btn px-2 py-1 rounded-md bg-slate-800 text-red-400 hover:bg-slate-700 text-[11px]">Kritis</button>
+                        <button onclick="filterMapMarkers('prioritas')" class="map-filter-btn px-2 py-1 rounded-md bg-slate-800 text-amber-400 hover:bg-slate-700 text-[11px]">Prioritas</button>
+                        <button onclick="filterMapMarkers('pemantauan')" class="map-filter-btn px-2 py-1 rounded-md bg-slate-800 text-sky-400 hover:bg-slate-700 text-[11px]">Pemantauan</button>
+                        <button onclick="filterMapMarkers('pulih')" class="map-filter-btn px-2 py-1 rounded-md bg-slate-800 text-emerald-400 hover:bg-slate-700 text-[11px]">Pulih</button>
+                    </div>
+
+                </div>
+
+                <!-- FLOATING LAYER TOGGLE TOOLBAR TOP RIGHT -->
+                <div class="absolute top-4 right-4 z-20 glass-panel p-3 rounded-xl space-y-2 text-xs shadow-lg w-52 pointer-events-auto">
+                    <div class="font-bold text-white text-xs border-b border-slate-700/60 pb-1 flex items-center justify-between">
+                        <span><i class="fa-solid fa-layer-group text-sky-400 mr-1"></i> Layer Peta</span>
+                        <span class="text-[10px] text-slate-400">Overlays</span>
+                    </div>
+
+                    <!-- Overlay Toggles -->
+                    <label class="flex items-center space-x-2 cursor-pointer hover:text-white text-slate-300">
+                        <input type="checkbox" id="toggleFireScar" checked onchange="toggleLayer('fireScar')" class="rounded border-slate-700 text-red-500 focus:ring-0">
+                        <span>Area Bekas Kebakaran</span>
+                    </label>
+                    <label class="flex items-center space-x-2 cursor-pointer hover:text-white text-slate-300">
+                        <input type="checkbox" id="toggleHydrology" checked onchange="toggleLayer('hydrology')" class="rounded border-slate-700 text-sky-500 focus:ring-0">
+                        <span>Buffer Hidrologi & Kanal</span>
+                    </label>
+                    <label class="flex items-center space-x-2 cursor-pointer hover:text-white text-slate-300">
+                        <input type="checkbox" id="togglePhytobead" checked onchange="toggleLayer('phytobead')" class="rounded border-slate-700 text-teal-500 focus:ring-0">
+                        <span>Titik Phytobead Cluster</span>
+                    </label>
+
+                    <div class="border-t border-slate-700/60 pt-2 font-bold text-white text-xs">
+                        <span>Mode Basemap</span>
+                    </div>
+                    
+                    <!-- Basemap Radio Selection -->
+                    <div class="grid grid-cols-3 gap-1">
+                        <button onclick="switchBasemap('esri')" id="bm-esri" class="px-1.5 py-1 bg-sky-500 text-white rounded text-[10px] font-semibold">Satelit</button>
+                        <button onclick="switchBasemap('dark')" id="bm-dark" class="px-1.5 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded text-[10px]">Gelap</button>
+                        <button onclick="switchBasemap('light')" id="bm-light" class="px-1.5 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded text-[10px]">Terang</button>
+                    </div>
+                </div>
+
+                <!-- FLOATING MAP LEGEND BOTTOM LEFT -->
+                <div class="absolute bottom-6 left-4 z-20 glass-panel p-3 rounded-xl text-xs space-y-1.5 shadow-lg max-w-xs pointer-events-auto">
+                    <div class="font-bold text-white text-xs mb-1">Simbologi & Indeks RPI</div>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3 h-3 rounded-full bg-red-500 border border-white inline-block"></span>
+                            <span class="text-slate-300">Kritis (RPI > 80)</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3 h-3 rounded-full bg-amber-500 border border-white inline-block"></span>
+                            <span class="text-slate-300">Prioritas (60-80)</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3 h-3 rounded-full bg-sky-500 border border-white inline-block"></span>
+                            <span class="text-slate-300">Pemantauan (30-60)</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3 h-3 rounded-full bg-emerald-500 border border-white inline-block"></span>
+                            <span class="text-slate-300">Pulih (&lt; 30)</span>
+                        </div>
+                    </div>
+                    <div class="pt-1 border-t border-slate-700/60 text-[10px] text-slate-400 flex items-center justify-between">
+                        <span>Arsiran Merah: Polygon Bekas Kebakaran</span>
+                    </div>
+                </div>
+
+                <!-- SLIDING SIDE DRAWER (DETAIL SITE PANEL) -->
+                <div id="mapSideDrawer" class="map-drawer closed absolute top-0 right-0 h-full w-full sm:w-96 glass-panel z-30 p-5 overflow-y-auto space-y-4 border-l border-slate-700/80 shadow-2xl pointer-events-auto">
+                    
+                    <div class="flex items-center justify-between border-b border-slate-700/60 pb-3">
+                        <div class="flex items-center space-x-2">
+                            <span id="drawerStatusBadge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/20 text-red-300 border border-red-500/30">KRITIS</span>
+                            <span class="text-xs text-slate-400 font-mono" id="drawerSiteId">SITE-KT01</span>
+                        </div>
+                        <button onclick="closeMapDrawer()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center border border-slate-700">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+
+                    <!-- Site Image Header -->
+                    <div class="relative h-36 rounded-xl overflow-hidden border border-slate-700/80">
+                        <img id="drawerImage" src="https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80" alt="Peat Site" class="w-full h-full object-cover">
+                        <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent"></div>
+                        <div class="absolute bottom-2 left-3 right-3 flex justify-between items-end">
+                            <div>
+                                <h2 class="text-base font-extrabold text-white" id="drawerSiteName">Sebangau Blok A</h2>
+                                <p class="text-xs text-slate-300" id="drawerLocation">Pulang Pisau, Kalimantan Tengah</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RPI Score Indicator -->
+                    <div class="bg-slate-900/90 rounded-xl p-3 border border-slate-800 space-y-2">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="font-bold text-slate-300">Restoration Priority Index (RPI)</span>
+                            <span class="font-mono font-bold text-red-400 text-base" id="drawerRpiScore">88 / 100</span>
+                        </div>
+                        <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                            <div id="drawerRpiBar" class="h-full bg-gradient-to-r from-amber-500 to-red-500 w-[88%] transition-all duration-500"></div>
+                        </div>
+                        <p class="text-[11px] text-slate-400 leading-tight" id="drawerRpiReason">
+                            Tinggi resiko akibat muka air tanah kritis (-48cm), kontaminasi PAH pasca kebakaran 2023, dan vegetasi terdegradasi.
+                        </p>
+                    </div>
+
+                    <!-- Live Telemetry Metrics Grid -->
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+                            <div class="text-slate-400 text-[10px]">Muka Air Tanah (MAT)</div>
+                            <div class="text-sm font-bold text-red-400 mt-0.5" id="drawerMat">-48 cm</div>
+                            <div class="text-[10px] text-slate-500">Bahaya Kebakaran</div>
+                        </div>
+                        <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+                            <div class="text-slate-400 text-[10px]">Kelembapan Tanah</div>
+                            <div class="text-sm font-bold text-amber-400 mt-0.5" id="drawerMoisture">28 %</div>
+                            <div class="text-[10px] text-slate-500">Sangat Kering</div>
+                        </div>
+                        <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+                            <div class="text-slate-400 text-[10px]">Indikator PAH (Data Lab)</div>
+                            <div class="text-sm font-bold text-red-400 mt-0.5" id="drawerPah">142 ppm</div>
+                            <div class="text-[10px] text-slate-500">Perlu verifikasi risiko residual</div>
+                        </div>
+                        <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+                            <div class="text-slate-400 text-[10px]">Tutupan Vegetasi</div>
+                            <div class="text-sm font-bold text-sky-400 mt-0.5" id="drawerVegetation">14 %</div>
+                            <div class="text-[10px] text-slate-500">Kanal Terbuka</div>
+                        </div>
+                    </div>
+
+                    <!-- Current RE-SOIL Phase -->
+                    <div class="bg-slate-900/90 rounded-xl p-3 border border-slate-800 space-y-1">
+                        <div class="text-xs text-slate-400">Fase RE-SOIL Saat Ini:</div>
+                        <div class="text-xs font-bold text-teal-300 flex items-center space-x-2" id="drawerPhaseText">
+                            <i class="fa-solid fa-flask text-teal-400"></i>
+                            <span>FASE 1: DETOKSIFIKASI core-shell aktif</span>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="space-y-2 pt-2">
+                        <button onclick="openPeatScanModal()" class="w-full py-2 bg-gradient-to-r from-teal-500 to-sky-500 hover:from-teal-600 hover:to-sky-600 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition-all shadow-lg">
+                            <i class="fa-solid fa-camera font-bold"></i>
+                            <span>Skrining Visual PeatScan (PAH)</span>
+                        </button>
+                        <button onclick="switchToPlannerWithSite()" class="w-full py-2 bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 font-semibold rounded-xl text-xs flex items-center justify-center space-x-2 transition-all">
+                            <i class="fa-solid fa-boxes-packing"></i>
+                            <span>Rencanakan Deployment Batch</span>
+                        </button>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+        <section id="sec-planner" class="tab-content hidden space-y-6">
+            
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Form Perencana Deployment -->
+                <div class="lg:col-span-7 glass-panel p-5 rounded-2xl space-y-4">
+                    <div class="border-b border-slate-800 pb-3">
+                        <h3 class="font-bold text-white text-base flex items-center gap-2">
+                            <i class="fa-solid fa-calculator text-sky-400"></i>
+                            <span>Kalkulator & Evaluasi Deployment Phytobead</span>
+                        </h3>
+                        <p class="text-xs text-slate-400 mt-1">Sistem otomatis evaluasi keselamatan lahan sebelum penebaran bio-bead</p>
+                    </div>
+
+                    <!-- Form Inputs -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                        <div>
+                            <label class="block text-slate-300 font-medium mb-1">Pilih Lokasi Intervensi</label>
+                            <select id="planSiteSelect" onchange="evaluatePlannerForm()" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-sky-500">
+                                <option value="sebangau">Sebangau Blok A (Kalteng) - Kritis</option>
+                                <option value="meranti">Meranti Buffer Zone (Riau) - Prioritas</option>
+                                <option value="kampar">Kampar Sektor 4 (Riau) - Pemantauan</option>
+                                <option value="kahayan">Kahayan Hilir (Kalteng) - Kritis</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-slate-300 font-medium mb-1">Luas Area Deployment (Hektar)</label>
+                            <input type="number" id="planArea" value="150" min="1" max="1000" oninput="evaluatePlannerForm()" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-sky-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-slate-300 font-medium mb-1">Simulasi Muka Air Tanah / MAT (cm)</label>
+                            <input type="number" id="planMat" value="-48" step="1" oninput="evaluatePlannerForm()" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-sky-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-slate-300 font-medium mb-1">Tingkat Kelembapan Gambut (%)</label>
+                            <input type="number" id="planMoisture" value="28" step="1" oninput="evaluatePlannerForm()" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-sky-500">
+                        </div>
+                    </div>
+
+                    <!-- Safety Evaluator Alert Box (REWET FIRST LOGIC) -->
+                    <div id="plannerAlertBox" class="p-4 rounded-xl border border-red-500/40 bg-red-500/10 text-red-200 text-xs space-y-2">
+                        <div class="flex items-center space-x-2 font-bold text-red-400">
+                            <i class="fa-solid fa-triangle-exclamation text-base"></i>
+                            <span>PERINGATAN KESELAMATAN: REWET FIRST REQUIRED!</span>
+                        </div>
+                        <p class="leading-relaxed">
+                            Muka Air Tanah di bawah -40cm (-48cm) & Kelembapan terlampau rendah (&lt;35%). Penebaran Phytobead <b>DITAHAN AUTOMATIS</b>. Lakukan rewetting (pembasahan kembali via sekat kanal) terlebih dahulu sebelum menebar bead!
+                        </p>
+                    </div>
+
+                    <!-- Calculated Need Output -->
+                    <div class="bg-slate-900/90 p-4 rounded-xl border border-slate-800 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                        <div>
+                            <span class="text-slate-400 text-[10px]">Kebutuhan Phytobead</span>
+                            <div class="text-base font-bold text-sky-400 mt-0.5" id="calcBeadNeed">750,000 Pcs</div>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 text-[10px]">Kebutuhan Bibit Jelutung</span>
+                            <div class="text-base font-bold text-teal-400 mt-0.5" id="calcSeedNeed">60,000 Pohon</div>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 text-[10px]">Target Window Transisi</span>
+                            <div class="text-base font-bold text-emerald-400 mt-0.5" id="calcTimeNeed">± 3–5 Minggu*</div>
+                        </div>
+                    </div>
+                    <p class="text-[10px] text-slate-500 -mt-2">*3–5 minggu adalah target engineering awal yang harus dikalibrasi melalui uji material, oksigen, PAH residual, dan viabilitas benih.</p>
+
+                    <button id="btnSubmitDeployment" disabled class="w-full py-3 bg-slate-800 text-slate-500 font-bold rounded-xl text-xs cursor-not-allowed transition-all">
+                        Simpan & Terbitkan Batch Deployment (Terkunci)
+                    </button>
+                </div>
+
+                <!-- QR Identity & Live Batch Tracking Card -->
+                <div class="lg:col-span-5 glass-panel p-5 rounded-2xl space-y-4">
+                    <div class="border-b border-slate-800 pb-3 flex justify-between items-center">
+                        <h3 class="font-bold text-white text-base">Identitas QR & Batch Tracker</h3>
+                        <span class="text-[10px] px-2 py-0.5 bg-sky-500/20 text-sky-300 rounded border border-sky-500/30">Verified Ledger</span>
+                    </div>
+
+                    <!-- Mock Batch Selector -->
+                    <div class="space-y-3">
+                        <div class="p-3 bg-slate-900 rounded-xl border border-slate-800 flex items-center space-x-4">
+                            <!-- SVG Generated QR Code Mock -->
+                            <div class="w-20 h-20 bg-white p-1 rounded-lg flex-shrink-0 flex items-center justify-center">
+                                <svg class="w-full h-full" viewBox="0 0 100 100" fill="none">
+                                    <rect width="100" height="100" fill="white"/>
+                                    <path d="M10 10h30v30h-30zM20 20v10h10v-10zM60 10h30v30h-30zM70 20v10h10v-10zM10 60h30v30h-30zM20 70v10h10v-10zM50 50h10v10h-10zM70 50h20v10h-20zM50 70h20v20h-20z" fill="black"/>
+                                </svg>
+                            </div>
+                            <div class="text-xs space-y-1">
+                                <span class="font-mono font-bold text-sky-400 text-sm">BATCH-PB2026-KT01</span>
+                                <p class="text-slate-300 font-semibold">RE-SOIL Smart Core-Shell Phytobead</p>
+                                <p class="text-slate-400 text-[11px]">Formula: alginat + PKS biochar + konsorsium indigenous + phyto-core jelutung</p>
+                                <div class="pt-1 flex items-center space-x-2 text-[10px] text-teal-300">
+                                    <i class="fa-solid fa-shield-halved"></i>
+                                    <span>Lab Ref: BPKH-KT-8841</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Progress Steps of Batch -->
+                        <div class="space-y-2 text-xs pt-2">
+                            <div class="font-bold text-slate-300">Riwayat Perjalanan Batch:</div>
+                            
+                            <div class="flex items-start space-x-3 text-[11px]">
+                                <div class="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 border border-emerald-500/40">✓</div>
+                                <div>
+                                    <span class="font-bold text-white">Screening Konsorsium Indigenous</span>
+                                    <p class="text-slate-400">10 Jan 2026 - Screening dan kompatibilitas konsorsium PAH-degrader</p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-start space-x-3 text-[11px]">
+                                <div class="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 border border-emerald-500/40">✓</div>
+                                <div>
+                                    <span class="font-bold text-white">Fabrikasi Core-Shell</span>
+                                    <p class="text-slate-400">11 Jan 2026 - Integrasi shell, transition layer, dan phyto-core</p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-start space-x-3 text-[11px]">
+                                <div class="w-5 h-5 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center flex-shrink-0 border border-sky-500/40 animate-pulse">●</div>
+                                <div>
+                                    <span class="font-bold text-sky-300">Deployment & Conditioning Aktif</span>
+                                    <p class="text-slate-400">12 Jan 2026 - Lokasi Sebangau Blok A</p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-start space-x-3 text-[11px] opacity-50">
+                                <div class="w-5 h-5 rounded-full bg-slate-800 text-slate-500 flex items-center justify-center flex-shrink-0">4</div>
+                                <div>
+                                    <span class="font-bold text-slate-400">Phyto-Release Dyera polyphylla</span>
+                                    <p class="text-slate-500">Menunggu hasil monitoring mikrohabitat, PAH residual, dan kesiapan transition layer</p>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+
+        </section>
+
+        <section id="sec-monitoring" class="tab-content hidden space-y-6">
+            
+            <!-- Monitoring Sub-Tab Controls -->
+            <div class="flex space-x-2 border-b border-slate-800 pb-3 overflow-x-auto no-scrollbar">
+                <button onclick="switchMonTab('env')" id="monTab-env" class="mon-tab-btn active px-4 py-2 rounded-xl text-xs font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                    <i class="fa-solid fa-temperature-full mr-1.5"></i>Parameter Lingkungan IoT
+                </button>
+                <button onclick="switchMonTab('lifecycle')" id="monTab-lifecycle" class="mon-tab-btn px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-arrows-spin mr-1.5"></i>Siklus Hidup Phytobead
+                </button>
+                <button onclick="switchMonTab('pah')" id="monTab-pah" class="mon-tab-btn px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-vial-circle-check mr-1.5"></i>Detoksifikasi PAH Validasi Lab
+                </button>
+                <button onclick="switchMonTab('dyera')" id="monTab-dyera" class="mon-tab-btn px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-tree mr-1.5"></i>Regenerasi Dyera polyphylla
+                </button>
+            </div>
+
+            <!-- MON SUB-TAB 1: ENVIRONMENT -->
+            <div id="monSub-env" class="mon-sub-content space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="glass-panel p-4 rounded-xl border border-slate-800 space-y-2">
+                        <div class="text-xs text-slate-400">Muka Air Tanah (MAT)</div>
+                        <div class="text-2xl font-bold text-teal-400">-28.4 cm</div>
+                        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                            <div class="bg-teal-400 h-full w-[70%]"></div>
+                        </div>
+                        <span class="text-[10px] text-slate-400">Stasiun telemetry Sebangau & Kampar</span>
+                    </div>
+
+                    <div class="glass-panel p-4 rounded-xl border border-slate-800 space-y-2">
+                        <div class="text-xs text-slate-400">Kelembapan Gambut Sub-surface</div>
+                        <div class="text-2xl font-bold text-sky-400">62.5 %</div>
+                        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                            <div class="bg-sky-400 h-full w-[62%]"></div>
+                        </div>
+                        <span class="text-[10px] text-slate-400">Sensor kedalaman 30cm</span>
+                    </div>
+
+                    <div class="glass-panel p-4 rounded-xl border border-slate-800 space-y-2">
+                        <div class="text-xs text-slate-400">pH Tanah Gambut</div>
+                        <div class="text-2xl font-bold text-amber-400">4.8 pH</div>
+                        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                            <div class="bg-amber-400 h-full w-[48%]"></div>
+                        </div>
+                        <span class="text-[10px] text-slate-400">Tingkat keasaman optimal tanaman Jelutung</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MON SUB-TAB 2: LIFECYCLE -->
+            <div id="monSub-lifecycle" class="mon-sub-content hidden glass-panel p-5 rounded-2xl space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                        <h3 class="font-bold text-white text-sm">Lifecycle RE-SOIL & Sentinel Bead Monitoring</h3>
+                        <p class="text-[11px] text-slate-400 mt-1">Sebagian kecil bead ditetapkan sebagai sentinel untuk sampling periodik: massa tersisa, swelling, integritas shell, transition layer, dan keterbukaan core.</p>
+                    </div>
+                    <span class="text-[10px] px-2 py-1 rounded bg-teal-500/10 text-teal-300 border border-teal-500/30 whitespace-nowrap">Sampling: W1 · W3 · W5 · W8*</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                    <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1">
+                        <div class="text-teal-400 font-bold">Tahap Awal</div>
+                        <div class="text-white font-semibold">Hidrasi & Swelling</div>
+                        <p class="text-slate-400 text-[11px]">Hydrogel menyerap kelembapan dan membentuk mikroreservoir air di sekitar bead.</p>
+                    </div>
+                    <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1">
+                        <div class="text-sky-400 font-bold">Fase Detox</div>
+                        <div class="text-white font-semibold">Capture–Bioattenuate</div>
+                        <p class="text-slate-400 text-[11px]">PKS biochar membantu sorpsi PAH sementara konsorsium mikroba indigenous mendukung bioattenuation/biodegradasi.</p>
+                    </div>
+                    <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1">
+                        <div class="text-amber-400 font-bold">Fase Transisi</div>
+                        <div class="text-white font-semibold">Controlled Transition</div>
+                        <p class="text-slate-400 text-[11px]">Transition layer berubah bertahap; akses air dan oksigen menuju phyto-core meningkat sesuai hasil kalibrasi.</p>
+                    </div>
+                    <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1">
+                        <div class="text-emerald-400 font-bold">Fase Regenerasi</div>
+                        <div class="text-white font-semibold">Phyto-Release & Establishment</div>
+                        <p class="text-slate-400 text-[11px]">Phyto-core mulai terbuka; material fate dan keamanan residu tetap dipantau melalui sampling sentinel dan evaluasi lapangan.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MON SUB-TAB 3: PAH PAH -->
+            <div id="monSub-pah" class="mon-sub-content hidden glass-panel p-5 rounded-2xl space-y-4">
+                <h3 class="font-bold text-white text-sm">Verifikasi Laboratorium Kadar PAH (Benzo[a]pyrene, Phenanthrene)</h3>
+                <div class="overflow-x-auto text-xs">
+                    <table class="w-full text-left">
+                        <thead class="bg-slate-800 text-slate-400 uppercase text-[10px]">
+                            <tr>
+                                <th class="p-2.5">Sampel Lokasi</th>
+                                <th class="p-2.5">PAH Awal (ppm)</th>
+                                <th class="p-2.5">PAH Hari Ke-30</th>
+                                <th class="p-2.5">PAH Hari Ke-60</th>
+                                <th class="p-2.5">Metode Lab</th>
+                                <th class="p-2.5">Status Evaluasi</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800">
+                            <tr>
+                                <td class="p-2.5 font-semibold text-white">Sebangau Titik S-01</td>
+                                <td class="p-2.5 text-red-400 font-bold">185.2 ppm</td>
+                                <td class="p-2.5 text-amber-400 font-bold">78.1 ppm</td>
+                                <td class="p-2.5 text-emerald-400 font-bold">18.4 ppm</td>
+                                <td class="p-2.5 text-slate-400">GC-MS / HPLC</td>
+                                <td class="p-2.5"><span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">Perlu Interpretasi Lab</span></td>
+                            </tr>
+                            <tr>
+                                <td class="p-2.5 font-semibold text-white">Meranti Titik M-04</td>
+                                <td class="p-2.5 text-red-400 font-bold">120.0 ppm</td>
+                                <td class="p-2.5 text-amber-400 font-bold">42.0 ppm</td>
+                                <td class="p-2.5 text-emerald-400 font-bold">9.2 ppm</td>
+                                <td class="p-2.5 text-slate-400">GC-MS / HPLC</td>
+                                <td class="p-2.5"><span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">Perlu Interpretasi Lab</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- MON SUB-TAB 4: DYERA POLYPHYLLA -->
+            <div id="monSub-dyera" class="mon-sub-content hidden glass-panel p-5 rounded-2xl space-y-4">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h3 class="font-bold text-white text-sm">Pertumbuhan & Adaptasi Akar <i>Dyera polyphylla</i> (Jelutung Gambut)</h3>
+                        <p class="text-xs text-slate-400">Pemantauan kelangsungan hidup bibit pasca detoksifikasi lahan</p>
+                    </div>
+                </div>
+                <div class="h-64 relative">
+                    <canvas id="chartDyeraGrowth"></canvas>
+                </div>
+            </div>
+
+        </section>
+
+        <section id="sec-reporting" class="tab-content hidden space-y-6">
+            
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Reporting Form -->
+                <div class="lg:col-span-6 glass-panel p-5 rounded-2xl space-y-4">
+                    <h3 class="font-bold text-white text-base flex items-center gap-2">
+                        <i class="fa-solid fa-paper-plane text-sky-400"></i>
+                        <span>Formulir Laporan Lapangan / Kebakaran / Hasil Lab</span>
+                    </h3>
+
+                    <form onsubmit="submitReport(event)" class="space-y-3 text-xs">
+                        <div>
+                            <label class="block text-slate-300 mb-1">Jenis Laporan</label>
+                            <select id="reportType" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200">
+                                <option value="rutin">Laporan Pemantauan Rutin Lapangan</option>
+                                <option value="kebakaran">⚠️ Peringatan Insiden Kebakaran / Titik Panas</option>
+                                <option value="lab">Hasil Analisis Sampel Laboratorium</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-slate-300 mb-1">Lokasi Site</label>
+                            <input type="text" id="reportSite" placeholder="Contoh: Sebangau Blok A / Titik Koordinat" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200">
+                        </div>
+
+                        <div>
+                            <label class="block text-slate-300 mb-1">Catatan / Temuan Lapangan</label>
+                            <textarea id="reportNotes" rows="3" placeholder="Deskripsikan kondisi muka air, indikasi asap, atau progres vegetasi..." required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200"></textarea>
+                        </div>
+
+                        <button type="submit" class="w-full py-2.5 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl transition-all">
+                            Kirim Laporan Terverifikasi
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Risk Alert Feed -->
+                <div class="lg:col-span-6 glass-panel p-5 rounded-2xl space-y-4">
+                    <h3 class="font-bold text-white text-base flex items-center justify-between">
+                        <span>Peringatan Risiko & Tindak Lanjut</span>
+                        <span class="text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/30">Alert Prototipe</span>
+                    </h3>
+
+                    <div id="riskFeed" class="space-y-3 max-h-80 overflow-y-auto">
+                        <div class="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs space-y-1">
+                            <div class="flex justify-between font-bold text-red-400">
+                                <span>⚠️ MAT Kritis Kebakaran</span>
+                                <span class="text-[10px] text-slate-400">10 Menit lalu</span>
+                            </div>
+                            <p class="text-slate-300 text-[11px]">Stasiun Kahayan Hilir mendeteksi MAT menyusut ke -55 cm. Risiko kerawanan kebakaran SANGAT TINGGI.</p>
+                        </div>
+
+                        <div class="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs space-y-1">
+                            <div class="flex justify-between font-bold text-amber-400">
+                                <span>⚡ Kadar PAH Di Atas Ambang Aman</span>
+                                <span class="text-[10px] text-slate-400">2 Jam lalu</span>
+                            </div>
+                            <p class="text-slate-300 text-[11px]">Sampel tanah Sebangau Blok A terindikasi PAH > 140 ppm. Penanaman bibit ditunda hingga detox fase 1 selesai.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </section>
+
+        <section id="sec-recommendation" class="tab-content hidden space-y-6">
+            
+            <div class="glass-panel p-6 rounded-2xl space-y-6">
+                <div class="border-b border-slate-800 pb-3">
+                    <h3 class="font-bold text-white text-lg flex items-center gap-2">
+                        <i class="fa-solid fa-brain text-teal-400"></i>
+                        <span>Mesin Rekomendasi Adaptif Berbasis Aturan</span>
+                    </h3>
+                    <p class="text-xs text-slate-400 mt-1">Menggunakan aturan keputusan transparan berdasarkan kondisi hidrologi, PAH, dan regenerasi tapak</p>
+                </div>
+
+                <!-- Interactive Parameter Testing -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                    <div>
+                        <label class="block text-slate-300 font-medium mb-1">Kondisi Muka Air Tanah (MAT)</label>
+                        <select id="aiParamMat" onchange="runAiRecommendation()" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200">
+                            <option value="kritis">Kritis (&lt; -40 cm)</option>
+                            <option value="sedang">Sedang (-20 cm s/d -40 cm)</option>
+                            <option value="aman">Aman (&gt; -20 cm)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-300 font-medium mb-1">Tingkat Kontaminasi PAH</label>
+                        <select id="aiParamPah" onchange="runAiRecommendation()" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200">
+                            <option value="tinggi">Tinggi (&gt; 100 ppm)</option>
+                            <option value="sedang">Sedang (20 - 100 ppm)</option>
+                            <option value="rendah">Rendah (&lt; 20 ppm)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-300 font-medium mb-1">Tutupan Kanopi Vegetasi</label>
+                        <select id="aiParamVeg" onchange="runAiRecommendation()" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200">
+                            <option value="jarang">Terbuka / Terdegradasi (&lt; 20%)</option>
+                            <option value="sedang">Sedang (20% - 60%)</option>
+                            <option value="lebat">Rimbun / Sehat (&gt; 60%)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- AI Output Action Box -->
+                <div class="p-5 bg-slate-900/90 rounded-xl border border-teal-500/40 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase tracking-wider text-teal-400">Rekomendasi Tindakan Adaptif</span>
+                        <span id="aiConfidenceBadge" class="text-xs px-2.5 py-0.5 rounded bg-teal-500/20 text-teal-300 font-mono">Rule set aktif</span>
+                    </div>
+
+                    <h2 id="aiActionTitle" class="text-lg font-extrabold text-white">REWET FIRST + EVALUASI DEPLOYMENT RE-SOIL</h2>
+
+                    <div class="space-y-2 text-xs text-slate-300">
+                        <div class="font-bold text-slate-200">Dasar Rekomendasi (aturan transparan):</div>
+                        <ul id="aiLogicSteps" class="list-disc pl-5 space-y-1.5 text-slate-400">
+                            <li>Langkah 1: MAT &lt; -40cm memicu penguncian penanaman bibit secara otomatis untuk mencegah kematian akibat kekeringan.</li>
+                            <li>Langkah 2: Risiko PAH tinggi mempertahankan tapak pada fase conditioning/detox hingga verifikasi laboratorium memadai.</li>
+                            <li>Langkah 3: Phyto-release dilakukan setelah kondisi mikrohabitat dan transition layer memenuhi kriteria hasil validasi.</li>
+                        </ul>
+                    </div>
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+    
+    <!-- MODAL 1: Anatomi Cutaway Core-Shell Phytobead -->
+    <div id="phytobeadModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="glass-panel w-full max-w-2xl rounded-2xl p-6 border border-slate-700 space-y-4 relative overflow-hidden">
+            <button onclick="closePhytobeadModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center border border-slate-700">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <div class="border-b border-slate-800 pb-2">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-atom text-teal-400"></i>
+                    <span>Anatomi Cutaway Core-Shell RE-SOIL Phytobead</span>
+                </h3>
+                <p class="text-xs text-slate-400">Arsitektur tiga lapis untuk conditioning mikrohabitat dan regenerasi bertahap</p>
+            </div>
+
+            <!-- Visual Cutaway Diagram (SVG Vector) -->
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-6 py-4">
+                <div class="w-48 h-48 relative flex-shrink-0">
+                    <!-- Concentric circles representation -->
+                    <div class="absolute inset-0 rounded-full border-4 border-dashed border-teal-400/80 animate-spin" style="animation-duration: 20s;"></div>
+                    <div class="absolute inset-2 rounded-full bg-teal-500/20 border-2 border-teal-400 flex items-center justify-center">
+                        <div class="w-32 h-32 rounded-full bg-sky-500/30 border-2 border-sky-400 flex items-center justify-center">
+                            <div class="w-16 h-16 rounded-full bg-emerald-500/40 border-2 border-emerald-400 flex items-center justify-center text-center">
+                                <span class="text-[9px] font-bold text-white">PHYTO CORE</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-3 text-xs text-slate-300">
+                    <div class="p-2.5 rounded-lg bg-slate-900 border border-teal-500/30">
+                        <span class="font-bold text-teal-300">1. Detox–Hydration Shell</span>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Hydrogel alginat berbasis biomassa alga membantu menyerap dan mempertahankan air; membawa PKS biochar dan konsorsium mikroba indigenous.</p>
+                    </div>
+                    <div class="p-2.5 rounded-lg bg-slate-900 border border-sky-500/30">
+                        <span class="font-bold text-sky-300">2. Programmable Transition Layer</span>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Lapisan transisi mengatur jeda antara conditioning dan regenerasi melalui swelling, erosi/degradasi, serta perubahan akses air dan oksigen.</p>
+                    </div>
+                    <div class="p-2.5 rounded-lg bg-slate-900 border border-emerald-500/30">
+                        <span class="font-bold text-emerald-300">3. Phyto-Regenerative Core</span>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Membawa benih jelutung rawa <i>Dyera polyphylla</i> sebagai sumber regenerasi yang dilepas setelah kondisi lokal lebih mendukung.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-2 border-t border-slate-800 text-right">
+                <button onclick="closePhytobeadModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold">Tutup Informasi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: Sub-fitur PeatScan Integrated Visual Screening -->
+    <div id="peatScanModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="glass-panel w-full max-w-lg rounded-2xl p-6 border border-slate-700 space-y-4 relative">
+            <button onclick="closePeatScanModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center border border-slate-700">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <div class="border-b border-slate-800 pb-2">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-camera text-sky-400"></i>
+                    <span>Sub-fitur PeatScan: Skrining Visual Kontaminasi PAH</span>
+                </h3>
+                <p class="text-xs text-slate-400">Deteksi kualitatif cepat residu hidrokarbon aromatik gambut pasca terbakar</p>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <!-- Mock Sample Upload Container -->
+                <div class="border-2 border-dashed border-slate-700 hover:border-sky-500 rounded-xl p-6 text-center bg-slate-900/50 cursor-pointer space-y-2">
+                    <i class="fa-solid fa-cloud-arrow-up text-3xl text-sky-400"></i>
+                    <p class="font-semibold text-slate-200">Unggah / Ambil Foto Sampel Gambut</p>
+                    <p class="text-[11px] text-slate-500">Gunakan foto sampel terstandar dan catatan lokasi; hasil bersifat preliminary screening</p>
+                </div>
+
+                <!-- Simulation Trigger Button -->
+                <button onclick="runPeatScanSimulation()" class="w-full py-2.5 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span>Jalankan Skrining Visual PeatScan</span>
+                </button>
+
+                <!-- Scan Result Area -->
+                <div id="peatScanResult" class="hidden p-3 bg-slate-900 rounded-xl border border-amber-500/40 space-y-2">
+                    <div class="flex justify-between font-bold text-amber-400">
+                        <span>Hasil Skrining Visual:</span>
+                        <span>Risiko PAH: TINGGI</span>
+                    </div>
+                    <p class="text-[11px] text-slate-300">
+                        Pola visual sampel mengindikasikan risiko tinggi. Lakukan verifikasi laboratorium sebelum menetapkan tindakan remediasi.
+                    </p>
+                </div>
+
+                <!-- MANDATORY SCIENTIFIC DISCLAIMER -->
+                <div class="p-3 bg-slate-950/80 rounded-lg border border-slate-800 text-[10px] text-slate-400 italic leading-relaxed flex items-start space-x-2">
+                    <i class="fa-solid fa-triangle-exclamation text-amber-400 mt-0.5 flex-shrink-0"></i>
+                    <span>
+                        <b>Disclaimer Ilmiah Wajib:</b> PeatScan merupakan alat skrining indikatif visual awal (preliminary screening), tidak menghasilkan konsentrasi PAH (mg/kg atau ppm), dan tidak menggantikan analisis kuantitatif laboratorium (misalnya GC-MS/HPLC sesuai metode yang tervalidasi).
+                    </span>
+                </div>
+            </div>
+
+            <div class="pt-2 border-t border-slate-800 text-right">
+                <button onclick="closePeatScanModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold">Tutup Skrining</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* Global Data & State */
+        let activeRole = 'ranger';
+        let currentTab = 'dashboard';
+        let leafletMap = null;
+        let activeBasemapLayer = null;
+        let basemaps = {};
+        let siteMarkers = [];
+        let siteDataList = [
+            {
+                id: 'sebangau',
+                siteCode: 'SITE-KT01',
+                name: 'Sebangau Blok A',
+                location: 'Pulang Pisau, Kalimantan Tengah',
+                coords: [-2.35, 113.88],
+                status: 'kritis',
+                statusLabel: 'KRITIS',
+                rpi: 88,
+                rpiReason: 'MAT kritis (-48cm), kontaminasi PAH tinggi pasca kebakaran, vegetasi terdegradasi.',
+                mat: '-48 cm',
+                matNum: -48,
+                moisture: '28 %',
+                moistureNum: 28,
+                pah: '142 ppm',
+                vegetation: '14 %',
+                phaseText: 'FASE 1: DETOKSIFIKASI Core-shell Aktif',
+                img: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80'
+            },
+            {
+                id: 'meranti',
+                siteCode: 'SITE-RI03',
+                name: 'Meranti Buffer Zone',
+                location: 'Kepulauan Meranti, Riau',
+                coords: [1.02, 102.72],
+                status: 'prioritas',
+                statusLabel: 'PRIORITAS',
+                rpi: 74,
+                rpiReason: 'Muka air berfluktuasi (-32cm), residu PAH sedang, persiapan penanaman Dyera.',
+                mat: '-32 cm',
+                matNum: -32,
+                moisture: '41 %',
+                moistureNum: 41,
+                pah: '65 ppm',
+                vegetation: '35 %',
+                phaseText: 'FASE 2: TRANSISI & Biostimulasi Nutrisi',
+                img: 'https://images.unsplash.com/photo-1511497584788-8767611136f6?auto=format&fit=crop&w=600&q=80'
+            },
+            {
+                id: 'kampar',
+                siteCode: 'SITE-RI01',
+                name: 'Kampar Sektor 4',
+                location: 'Semenanjung Kampar, Riau',
+                coords: [0.45, 102.25],
+                status: 'pemantauan',
+                statusLabel: 'PEMANTAUAN',
+                rpi: 42,
+                rpiReason: 'Muka air aman (-18cm), detoksifikasi PAH tuntas 90%, perkecambahan bibit berlangsung.',
+                mat: '-18 cm',
+                matNum: -18,
+                moisture: '65 %',
+                moistureNum: 65,
+                pah: '18 ppm',
+                vegetation: '58 %',
+                phaseText: 'FASE 3: PERKECAMBAHAN & Akar Jelutung Established',
+                img: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=600&q=80'
+            },
+            {
+                id: 'sembilang',
+                siteCode: 'SITE-SS02',
+                name: 'Sembilang Restoration Area',
+                location: 'Banyuasin, Sumatera Selatan',
+                coords: [-2.10, 104.55],
+                status: 'pulih',
+                statusLabel: 'PULIH',
+                rpi: 18,
+                rpiReason: 'MAT mendekati permukaan (-5cm), ekosistem stabil, tutupan kanopi >75%.',
+                mat: '-5 cm',
+                matNum: -5,
+                moisture: '88 %',
+                moistureNum: 88,
+                pah: '&lt; 5 ppm',
+                vegetation: '78 %',
+                phaseText: 'FASE 4: ESTABLISHMENT & Tutupan Kanopi Sehat',
+                img: 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=600&q=80'
+            },
+            {
+                id: 'kahayan',
+                siteCode: 'SITE-KT02',
+                name: 'Kahayan Hilir',
+                location: 'Pulang Pisau, Kalimantan Tengah',
+                coords: [-2.65, 114.15],
+                status: 'kritis',
+                statusLabel: 'KRITIS',
+                rpi: 92,
+                rpiReason: 'Ancaman kebakaran tinggi, MAT -55cm, perlu penyekatan kanal darurat.',
+                mat: '-55 cm',
+                matNum: -55,
+                moisture: '22 %',
+                moistureNum: 22,
+                pah: '160 ppm',
+                vegetation: '8 %',
+                phaseText: 'FASE 1: DETOKSIFIKASI Kritis',
+                img: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80'
+            }
+        ];
+
+        let overlayLayers = {
+            fireScar: null,
+            hydrology: null,
+            phytobead: null
+        };
+
+        let chartMAT = null;
+        let chartPAH = null;
+        let chartDyera = null;
+
+        /* Initialize Page Safely */
+        document.addEventListener('DOMContentLoaded', function() {
+            try { initCharts(); } catch (err) { console.error('Chart initialization failed:', err); showDependencyWarning('Grafik belum dapat dimuat. Fitur lain tetap dapat digunakan.'); }
+            try { runAiRecommendation(); } catch (err) { console.error('Recommendation initialization failed:', err); }
+            try { evaluatePlannerForm(); } catch (err) { console.error('Planner initialization failed:', err); }
+        });
+
+        function showDependencyWarning(message) {
+            let box = document.getElementById('dependencyWarning');
+            if(!box) {
+                box = document.createElement('div');
+                box.id = 'dependencyWarning';
+                box.className = 'dependency-warning';
+                document.body.appendChild(box);
+            }
+            box.textContent = message;
+            clearTimeout(window.__dependencyWarningTimer);
+            window.__dependencyWarningTimer = setTimeout(() => box.remove(), 6500);
+        }
+
+        /* Switch Main Tabs */
+        function switchTab(tabId) {
+            currentTab = tabId;
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-sky-500/20', 'text-sky-300', 'border', 'border-sky-500/30');
+                btn.classList.add('text-slate-400');
+            });
+
+            const activeBtn = document.getElementById('nav-' + tabId);
+            if(activeBtn) {
+                activeBtn.classList.add('bg-sky-500/20', 'text-sky-300', 'border', 'border-sky-500/30');
+                activeBtn.classList.remove('text-slate-400');
+            }
+
+            const targetSec = document.getElementById('sec-' + tabId);
+            if(targetSec) targetSec.classList.remove('hidden');
+
+            // Initialize Leaflet only when the map tab is visible. This avoids deployment/render errors caused by initializing a map in a hidden container.
+            if(tabId === 'map') {
+                if(!leafletMap) initLeafletMap();
+                if(leafletMap) {
+                    setTimeout(() => leafletMap.invalidateSize(), 250);
+                }
+            }
+        }
+
+        /* Role Switcher Handler */
+        function changeUserRole(role) {
+            activeRole = role;
+            const badge = document.getElementById('roleBadgeDisplay');
+            const roleNames = {
+                publik: 'Mode: Publik / Tamu',
+                ranger: 'Mode: Ranger Lapangan',
+                peneliti: 'Mode: Peneliti Gambut',
+                admin: 'Mode: Admin Restorasi'
+            };
+            if(badge) badge.innerText = roleNames[role] || role;
+        }
+
+        function initLeafletMap() {
+            if(leafletMap) return;
+            const mapEl = document.getElementById('peatMap');
+            if(!mapEl) return;
+            if(typeof L === 'undefined') {
+                console.error('Leaflet library is not available.');
+                showDependencyWarning('Peta belum dapat dimuat karena pustaka Leaflet gagal dimuat. Periksa koneksi/CDN lalu muat ulang halaman.');
+                return;
+            }
+
+            // Base map layers setup
+            basemaps = {
+                esri: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS'
+                }),
+                dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; CartoDB'
+                }),
+                light: L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; CartoDB'
+                })
+            };
+
+            // Initialize Map Centered on Indonesia Peat Region
+            leafletMap = L.map('peatMap', {
+                center: [-1.2, 108.5],
+                zoom: 6,
+                layers: [basemaps.esri],
+                zoomControl: false
+            });
+
+            L.control.zoom({ position: 'bottomright' }).addTo(leafletMap);
+            activeBasemapLayer = basemaps.esri;
+
+            // Create Layer Groups
+            overlayLayers.fireScar = L.layerGroup().addTo(leafletMap);
+            overlayLayers.hydrology = L.layerGroup().addTo(leafletMap);
+            overlayLayers.phytobead = L.layerGroup().addTo(leafletMap);
+
+            // Add Polygon Overlays (Fire Scar Zones)
+            const firePolygon1 = L.polygon([
+                [-2.25, 113.80], [-2.20, 113.95], [-2.45, 113.98], [-2.42, 113.78]
+            ], {
+                color: '#ef4444',
+                fillColor: '#ef4444',
+                fillOpacity: 0.35,
+                weight: 2,
+                dashArray: '5, 5'
+            }).bindTooltip("Zona Bekas Kebakaran 2023 - Sebangau", {sticky: true});
+            overlayLayers.fireScar.addLayer(firePolygon1);
+
+            const firePolygon2 = L.polygon([
+                [0.90, 102.60], [1.10, 102.80], [0.95, 102.90], [0.85, 102.65]
+            ], {
+                color: '#ef4444',
+                fillColor: '#ef4444',
+                fillOpacity: 0.3,
+                weight: 2
+            }).bindTooltip("Zona Bekas Kebakaran - Meranti Buffer", {sticky: true});
+            overlayLayers.fireScar.addLayer(firePolygon2);
+
+            // Add Hydrology / Canal Buffer Lines
+            const canalLine = L.polyline([
+                [-2.30, 113.82], [-2.38, 113.90], [-2.40, 114.05]
+            ], {
+                color: '#06b6d4',
+                weight: 4,
+                opacity: 0.8
+            }).bindTooltip("Kanal Utama Pembasahan Kembali (Rewetting Canal)", {sticky: true});
+            overlayLayers.hydrology.addLayer(canalLine);
+
+            // Add Phytobead Micro Clusters
+            const beadCluster = L.circleMarker([-2.34, 113.86], {
+                radius: 12,
+                fillColor: '#14b8a6',
+                color: '#ffffff',
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.8
+            }).bindTooltip("Titik Penebaran Phytobead Batch PB-2026-KT01", {sticky: true});
+            overlayLayers.phytobead.addLayer(beadCluster);
+
+            // Render Site Pulse Markers
+            renderMapMarkers(siteDataList);
+        }
+
+        /* Render Animated Pulsing Markers */
+        function renderMapMarkers(data) {
+            if(!leafletMap || typeof L === 'undefined') return;
+            siteMarkers.forEach(m => { if(leafletMap.hasLayer(m)) leafletMap.removeLayer(m); });
+            siteMarkers = [];
+
+            data.forEach(site => {
+                let colorClass = 'pulse-marker-kritis';
+                let bgStyle = 'bg-red-500';
+                
+                if(site.status === 'prioritas') { colorClass = 'pulse-marker-prioritas'; bgStyle = 'bg-amber-500'; }
+                else if(site.status === 'pemantauan') { colorClass = 'pulse-marker-pemantauan'; bgStyle = 'bg-sky-500'; }
+                else if(site.status === 'pulih') { colorClass = 'pulse-marker-pulih'; bgStyle = 'bg-emerald-500'; }
+
+                const customDivIcon = L.divIcon({
+                    className: 'custom-leaflet-marker',
+                    html: `
+                        <div class="relative flex items-center justify-center cursor-pointer">
+                            <div class="w-8 h-8 rounded-full ${bgStyle} ${colorClass} opacity-80 flex items-center justify-center border-2 border-white shadow-xl">
+                                <i class="fa-solid fa-droplet text-white text-xs"></i>
+                            </div>
+                        </div>
+                    `,
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
+                });
+
+                const marker = L.marker(site.coords, { icon: customDivIcon }).addTo(leafletMap);
+
+                // Leaflet Glass Popup
+                const popupContent = `
+                    <div class="p-1 space-y-2 text-xs">
+                        <div class="font-extrabold text-white text-sm">${site.name}</div>
+                        <div class="text-slate-300">${site.location}</div>
+                        <div class="flex items-center space-x-2">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${bgStyle} text-white">${site.statusLabel}</span>
+                            <span class="text-slate-400">RPI: ${site.rpi}/100</span>
+                        </div>
+                        <div class="pt-1 border-t border-slate-700/60 flex justify-between text-[11px]">
+                            <span>MAT: <b>${site.mat}</b></span>
+                            <span>PAH: <b>${site.pah}</b></span>
+                        </div>
+                        <button onclick="openMapDrawerForSite('${site.id}')" class="w-full mt-2 py-1 bg-sky-500 text-white font-bold rounded text-center text-xs">Lihat Panel Detail</button>
+                    </div>
+                `;
+                marker.bindPopup(popupContent);
+
+                marker.on('click', () => {
+                    openMapDrawerForSite(site.id);
+                });
+
+                siteMarkers.push(marker);
+            });
+        }
+
+        /* Basemap Switcher Handler */
+        function switchBasemap(mode) {
+            if(!leafletMap || !basemaps[mode]) return;
+            if(activeBasemapLayer && leafletMap.hasLayer(activeBasemapLayer)) leafletMap.removeLayer(activeBasemapLayer);
+            activeBasemapLayer = basemaps[mode];
+            leafletMap.addLayer(activeBasemapLayer);
+
+            document.querySelectorAll('#bm-esri, #bm-dark, #bm-light').forEach(b => {
+                b.classList.remove('bg-sky-500', 'text-white');
+                b.classList.add('bg-slate-800', 'text-slate-300');
+            });
+            document.getElementById('bm-' + mode).classList.add('bg-sky-500', 'text-white');
+        }
+
+        /* Layer Overlay Toggle */
+        function toggleLayer(layerKey) {
+            if(!leafletMap || !overlayLayers[layerKey]) return;
+            const checkbox = document.getElementById('toggle' + layerKey.charAt(0).toUpperCase() + layerKey.slice(1));
+            if(!checkbox) return;
+            const isChecked = checkbox.checked;
+            if(isChecked) {
+                leafletMap.addLayer(overlayLayers[layerKey]);
+            } else {
+                leafletMap.removeLayer(overlayLayers[layerKey]);
+            }
+        }
+
+        /* Filter Map Markers by Status */
+        function filterMapMarkers(status) {
+            if(status === 'all') {
+                renderMapMarkers(siteDataList);
+            } else {
+                const filtered = siteDataList.filter(s => s.status === status);
+                renderMapMarkers(filtered);
+            }
+        }
+
+        /* Search Bar & Autocomplete */
+        function filterSiteSearch(query) {
+            const dropdown = document.getElementById('searchDropdown');
+            if(!query.trim()) {
+                dropdown.classList.add('hidden');
+                return;
+            }
+            const filtered = siteDataList.filter(s => s.name.toLowerCase().includes(query.toLowerCase()) || s.location.toLowerCase().includes(query.toLowerCase()));
+            
+            if(filtered.length === 0) {
+                dropdown.innerHTML = `<div class="p-2 text-slate-400">Tidak ada site ditemukan</div>`;
+            } else {
+                dropdown.innerHTML = filtered.map(s => `
+                    <div onclick="zoomToSite('${s.id}')" class="p-2 hover:bg-slate-800 cursor-pointer flex justify-between items-center text-xs">
+                        <span class="font-bold text-white">${s.name}</span>
+                        <span class="text-[10px] text-slate-400">${s.statusLabel}</span>
+                    </div>
+                `).join('');
+            }
+            dropdown.classList.remove('hidden');
+        }
+
+        function zoomToSite(siteId) {
+            switchTab('map');
+            document.getElementById('searchDropdown').classList.add('hidden');
+            const site = siteDataList.find(s => s.id === siteId);
+            if(site) {
+                if(!leafletMap) initLeafletMap();
+                if(leafletMap) {
+                    setTimeout(() => {
+                        leafletMap.invalidateSize();
+                        leafletMap.flyTo(site.coords, 10, { duration: 1.2 });
+                        openMapDrawerForSite(siteId);
+                    }, 120);
+                }
+            }
+        }
+
+        function resetMapView() {
+            if(leafletMap) {
+                leafletMap.flyTo([-1.2, 108.5], 6);
+                closeMapDrawer();
+            }
+        }
+
+        /* Map Side-Drawer Operations */
+        function openMapDrawerForSite(siteId) {
+            const site = siteDataList.find(s => s.id === siteId);
+            if(!site) return;
+
+            document.getElementById('drawerSiteId').innerText = site.siteCode;
+            document.getElementById('drawerSiteName').innerText = site.name;
+            document.getElementById('drawerLocation').innerText = site.location;
+            document.getElementById('drawerRpiScore').innerText = site.rpi + ' / 100';
+            document.getElementById('drawerRpiBar').style.width = site.rpi + '%';
+            document.getElementById('drawerRpiReason').innerText = site.rpiReason;
+            document.getElementById('drawerMat').innerText = site.mat;
+            document.getElementById('drawerMoisture').innerText = site.moisture;
+            document.getElementById('drawerPah').innerText = site.pah;
+            document.getElementById('drawerVegetation').innerText = site.vegetation;
+            document.getElementById('drawerPhaseText').innerHTML = `<i class="fa-solid fa-flask text-teal-400"></i> <span>${site.phaseText}</span>`;
+            document.getElementById('drawerImage').src = site.img;
+
+            const badge = document.getElementById('drawerStatusBadge');
+            badge.innerText = site.statusLabel;
+            
+            // Drawer styling based on status
+            if(site.status === 'kritis') badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/20 text-red-300 border border-red-500/30';
+            else if(site.status === 'prioritas') badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30';
+            else if(site.status === 'pemantauan') badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30';
+            else badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+
+            document.getElementById('mapSideDrawer').classList.remove('closed');
+        }
+
+        function closeMapDrawer() {
+            document.getElementById('mapSideDrawer').classList.add('closed');
+        }
+
+        function switchToPlannerWithSite() {
+            closeMapDrawer();
+            switchTab('planner');
+        }
+
+        function evaluatePlannerForm() {
+            const siteSelect = document.getElementById('planSiteSelect');
+            const siteKey = siteSelect ? siteSelect.value : 'sebangau';
+            const area = parseFloat(document.getElementById('planArea').value) || 100;
+            const mat = parseFloat(document.getElementById('planMat').value) || -40;
+            const moisture = parseFloat(document.getElementById('planMoisture').value) || 30;
+
+            const alertBox = document.getElementById('plannerAlertBox');
+            const submitBtn = document.getElementById('btnSubmitDeployment');
+
+            // REWET FIRST SAFETY RULE: If MAT < -40 cm OR Moisture < 35% -> BLOCK!
+            if(mat < -40 || moisture < 35) {
+                alertBox.classList.remove('hidden');
+                submitBtn.disabled = true;
+                submitBtn.className = 'w-full py-3 bg-slate-800 text-slate-500 font-bold rounded-xl text-xs cursor-not-allowed transition-all';
+                submitBtn.innerText = 'Penebaran Terkunci (Selesaikan Pembasahan / Rewetting Dulu)';
+            } else {
+                alertBox.classList.add('hidden');
+                submitBtn.disabled = false;
+                submitBtn.className = 'w-full py-3 bg-gradient-to-r from-teal-500 to-sky-500 hover:from-teal-600 hover:to-sky-600 text-slate-950 font-bold rounded-xl text-xs shadow-lg transition-all cursor-pointer';
+                submitBtn.innerText = 'Simpan & Terbitkan Batch Deployment Phytobead';
+            }
+
+            // Calculate estimated material demands
+            document.getElementById('calcBeadNeed').innerText = (area * 5000).toLocaleString('id-ID') + ' Pcs';
+            document.getElementById('calcSeedNeed').innerText = (area * 400).toLocaleString('id-ID') + ' Pohon';
+        }
+
+        function switchMonTab(subKey) {
+            document.querySelectorAll('.mon-sub-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.mon-tab-btn').forEach(btn => {
+                btn.classList.remove('bg-sky-500/20', 'text-sky-300', 'border', 'border-sky-500/30');
+                btn.classList.add('text-slate-400');
+            });
+
+            document.getElementById('monSub-' + subKey).classList.remove('hidden');
+            const activeBtn = document.getElementById('monTab-' + subKey);
+            if(activeBtn) {
+                activeBtn.classList.add('bg-sky-500/20', 'text-sky-300', 'border', 'border-sky-500/30');
+                activeBtn.classList.remove('text-slate-400');
+            }
+        }
+
+        function runAiRecommendation() {
+            const matCond = document.getElementById('aiParamMat').value;
+            const pahCond = document.getElementById('aiParamPah').value;
+            const vegCond = document.getElementById('aiParamVeg').value;
+
+            const titleEl = document.getElementById('aiActionTitle');
+            const stepsEl = document.getElementById('aiLogicSteps');
+
+            let title = '';
+            let steps = [];
+
+            if(matCond === 'kritis') {
+                title = 'REWET FIRST + EVALUASI DEPLOYMENT RE-SOIL';
+                steps.push('Langkah 1: MAT di bawah -40cm memicu kunci keselamatan rewetting otomatis.');
+                steps.push('Langkah 2: Lakukan tindakan rewetting sesuai rencana pengelolaan hidrologi tapak sebelum deployment.');
+                steps.push('Langkah 3: Setelah kondisi hidrologi memadai, tentukan kebutuhan phytobead berdasarkan hasil validasi lapangan dan desain deployment.');
+            } else if(pahCond === 'tinggi') {
+                title = 'PERTAHANKAN FASE DETOX + VERIFIKASI LAB';
+                steps.push('Langkah 1: Risiko PAH tinggi memerlukan evaluasi residual risk sebelum phyto-release.');
+                steps.push('Langkah 2: Pertahankan fase conditioning/detox dan evaluasi tren PAH berdasarkan hasil sampling.');
+                steps.push('Langkah 3: Lakukan sampling laboratorium terjadwal untuk mengonfirmasi konsentrasi, bioavailabilitas, dan potensi remobilisasi.');
+            } else {
+                title = 'PHYTO-RELEASE / REGENERASI + MONITORING';
+                steps.push('Langkah 1: Kondisi hidrologi dan hasil evaluasi PAH menunjukkan tapak dapat dipertimbangkan untuk fase regenerasi.');
+                steps.push('Langkah 2: Lanjutkan phyto-release dan evaluasi germinasi/establishment sesuai protokol site-specific.');
+                steps.push('Langkah 3: Lanjutkan monitoring vegetasi, sentinel bead, dan kondisi lingkungan secara berkala.');
+            }
+
+            titleEl.innerText = title;
+            stepsEl.innerHTML = steps.map(s => `<li>${s}</li>`).join('');
+        }
+
+        function escapeHtml(value) {
+            return String(value).replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
+        }
+
+        function submitReport(e) {
+            e.preventDefault();
+            const type = document.getElementById('reportType').value;
+            const site = document.getElementById('reportSite').value;
+            const notes = document.getElementById('reportNotes').value;
+
+            const feed = document.getElementById('riskFeed');
+            const newItem = document.createElement('div');
+            newItem.className = 'p-3 bg-sky-500/10 border border-sky-500/30 rounded-xl text-xs space-y-1';
+            newItem.innerHTML = `
+                <div class="flex justify-between font-bold text-sky-400">
+                    <span>📌 Laporan Terkirim (${type.toUpperCase()})</span>
+                    <span class="text-[10px] text-slate-400">Baru saja</span>
+                </div>
+                <p class="text-slate-300 text-[11px]">${escapeHtml(site)}: ${escapeHtml(notes)}</p>
+            `;
+            feed.prepend(newItem);
+
+            alert('Laporan berhasil dikirim dan diverifikasi ke sistem log!');
+            e.target.reset();
+        }
+
+        /* Modal Toggle Functions */
+        function openPhytobeadModal() {
+            document.getElementById('phytobeadModal').classList.remove('hidden');
+        }
+        function closePhytobeadModal() {
+            document.getElementById('phytobeadModal').classList.add('hidden');
+        }
+        function openPeatScanModal() {
+            document.getElementById('peatScanModal').classList.remove('hidden');
+        }
+        function closePeatScanModal() {
+            document.getElementById('peatScanModal').classList.add('hidden');
+        }
+        function runPeatScanSimulation() {
+            const res = document.getElementById('peatScanResult');
+            res.classList.remove('hidden');
+        }
+
+        function initCharts() {
+            if(typeof Chart === 'undefined') {
+                console.error('Chart.js library is not available.');
+                showDependencyWarning('Grafik belum dapat dimuat karena pustaka Chart.js gagal dimuat. Periksa koneksi/CDN lalu muat ulang halaman.');
+                return;
+            }
+            // Chart 1: MAT & Moisture Trend
+            const canvas1 = document.getElementById('chartMATMoisture');
+            if(!canvas1) return;
+            const ctx1 = canvas1.getContext('2d');
+            chartMAT = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul'],
+                    datasets: [
+                        {
+                            label: 'Muka Air Tanah (cm)',
+                            data: [-48, -42, -35, -28, -22, -18, -15],
+                            borderColor: '#06b6d4',
+                            backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Kelembapan Gambut (%)',
+                            data: [28, 35, 42, 55, 62, 70, 78],
+                            borderColor: '#10b981',
+                            backgroundColor: 'transparent',
+                            borderDash: [5, 5],
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+                    scales: {
+                        x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    }
+                }
+            });
+
+            // Chart 2: PAH Degradation Curve
+            const canvas2 = document.getElementById('chartPAHDegradation');
+            if(!canvas2) return;
+            const ctx2 = canvas2.getContext('2d');
+            chartPAH = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: ['Hari 0', 'Hari 15', 'Hari 30', 'Hari 45', 'Hari 60', 'Hari 90'],
+                    datasets: [{
+                        label: 'Kadar PAH Terdeteksi (ppm)',
+                        data: [185, 130, 78, 35, 18, 5],
+                        backgroundColor: ['#ef4444', '#f59e0b', '#f59e0b', '#06b6d4', '#10b981', '#10b981'],
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+                    scales: {
+                        x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    }
+                }
+            });
+
+            // Chart 3: Dyera Growth Chart
+            const canvas3 = document.getElementById('chartDyeraGrowth');
+            if(!canvas3) return;
+            const ctx3 = canvas3.getContext('2d');
+            chartDyera = new Chart(ctx3, {
+                type: 'line',
+                data: {
+                    labels: ['Bulan 1', 'Bulan 2', 'Bulan 3', 'Bulan 4', 'Bulan 5', 'Bulan 6'],
+                    datasets: [{
+                        label: 'Tinggi Rata-rata Bibit Jelutung (cm)',
+                        data: [25, 32, 45, 62, 80, 105],
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+                    scales: {
+                        x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
